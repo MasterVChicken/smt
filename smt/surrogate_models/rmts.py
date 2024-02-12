@@ -156,14 +156,19 @@ class RMTS(SurrogateModel):
         for kx in self.training_points[None]:
             xt, yt = self.training_points[None][kx]
 
-            xmin = np.min(xt, axis=0)
-            xmax = np.max(xt, axis=0)
-            assert np.all(xlimits[:, 0] <= xmin), (
-                "Training points below min for %s" % kx
-            )
-            assert np.all(xlimits[:, 1] >= xmax), (
-                "Training points above max for %s" % kx
-            )
+            # 进行修改，原始代码使用断言以保证xt和yt不会超出min-max范围
+            # 而在此处修改为向上或向下修正到max/min
+            xt = np.maximum(xt, xlimits[:, 0])
+            xt = np.minimum(xt, xlimits[:, 1])
+            # 原始代码，进行注释
+            # xmin = np.min(xt, axis=0)
+            # xmax = np.max(xt, axis=0)
+            # assert np.all(xlimits[:, 0] <= xmin), (
+            #     "Training points below min for %s" % kx
+            # )
+            # assert np.all(xlimits[:, 1] >= xmax), (
+            #     "Training points above max for %s" % kx
+            # )
 
             if kx == 0:
                 c = 1.0

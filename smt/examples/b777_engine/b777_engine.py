@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import zfpy
 
 
 def get_b777_engine():
@@ -17,11 +18,29 @@ def get_b777_engine():
     return xt, yt, dyt_dxt, xlimits
 
 
+def get_b777_engine_compressed():
+    this_dir = os.path.split(__file__)[0]
+
+    nt = 12 * 11 * 8
+    xt = np.loadtxt(os.path.join(this_dir, "b777_engine_inputs.dat")).reshape((nt, 3))
+    yt = np.loadtxt(os.path.join(this_dir, "b777_engine_outputs.dat")).reshape((nt, 2))
+    dyt_dxt = np.loadtxt(os.path.join(this_dir, "b777_engine_derivs.dat")).reshape(
+        (nt, 2, 3)
+    )
+
+    xlimits = np.array([[0, 0.9], [0, 15], [0, 1.0]])
+
+    return (zfpy.decompress_numpy(zfpy.compress_numpy(xt, tolerance=1e-4)),
+            zfpy.decompress_numpy(zfpy.compress_numpy(yt, tolerance=1e-4)),
+            zfpy.decompress_numpy(zfpy.compress_numpy(dyt_dxt, tolerance=1e-4)),
+            zfpy.decompress_numpy(zfpy.compress_numpy(xlimits, tolerance=1e-4)))
+
+
 def plot_b777_engine(xt, yt, limits, interp):
     import numpy as np
     import matplotlib
 
-    matplotlib.use("Agg")
+    # matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     val_M = np.array(

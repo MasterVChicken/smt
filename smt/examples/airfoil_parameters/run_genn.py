@@ -2,7 +2,10 @@
 Predicting Airfoil Aerodynamics through data by Raul Carreira Rufato and Prof. Joseph Morlier
 """
 
+# Gradient Enhanced Neural Networks
+
 import numpy as np
+import zfpy
 
 from smt.examples.airfoil_parameters.learning_airfoil_parameters import (
     load_cd_training_data,
@@ -43,10 +46,11 @@ load_smt_data(genn, x_train, y_train, dy_train)
 
 genn.train()
 
+# 其实没有太大用处，主要是为了展现训练过程中的convergence and accuracy指标
 ## non-API function to plot training history (to check convergence)
-# genn.plot_training_history()
+genn.plot_training_history()
 ## non-API function to check accuracy of regression
-# genn.goodness_of_fit(x_test, y_test, dy_test)
+genn.goodness_of_fit(x_test, y_test, dy_test)
 
 # API function to predict values at new (unseen) points
 y_pred = genn.predict_values(x_test)
@@ -74,3 +78,5 @@ cd_pred = genn.predict_values(input)
 print("Drag coefficient prediction (cd): ", cd_pred[0, 0])
 
 plot_predictions(airfoil_modeshapes, Ma, genn)
+
+# plot_predictions_with_compression(airfoil_modeshapes, Ma, genn)

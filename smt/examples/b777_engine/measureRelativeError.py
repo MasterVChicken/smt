@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 
 from smt.surrogate_models import RMTB
 from smt.examples.b777_engine.b777_engine import get_b777_engine, plot_b777_engine, get_b777_engine_compressed
@@ -20,7 +20,7 @@ interp.set_training_derivatives(xt, dyt_dxt[:, :, 1], 1)
 interp.set_training_derivatives(xt, dyt_dxt[:, :, 2], 2)
 interp.train()
 
-plot_b777_engine(xt, yt, xlimits, interp)
+# plot_b777_engine(xt, yt, xlimits, interp)
 
 xt_c, yt_c, dyt_dxt_c, xlimits_c = get_b777_engine_compressed()
 
@@ -38,21 +38,34 @@ interp_c.set_training_derivatives(xt_c, dyt_dxt_c[:, :, 0], 0)
 interp_c.set_training_derivatives(xt_c, dyt_dxt_c[:, :, 1], 1)
 interp_c.set_training_derivatives(xt_c, dyt_dxt_c[:, :, 2], 2)
 interp_c.train()
-plot_b777_engine(xt_c, yt_c, xlimits_c, interp_c)
+# plot_b777_engine(xt_c, yt_c, xlimits_c, interp_c)
 
-print("Let's compare")
-print(
-    interp.predict_values(numpy.array([[1.000000000000000056e-01,1.523999999999999799e+00,8.000011854064611461e-01]])))
-print(interp_c.predict_values(
-    numpy.array([[1.000000000000000056e-01,1.523999999999999799e+00,8.000011854064611461e-01]])))
+num_rows_to_select = 100
+relative_acc_SFC = np.zeros(100)
+relative_acc_thrust = np.zeros(100)
+i = 0
+random_indices = np.random.choice(xt.shape[0], size=num_rows_to_select, replace=False)
+print(random_indices)
+selected_rows = xt[random_indices, :]
+selected_results = yt[random_indices, :]
+# print(selected_rows.shape)
+# print(selected_rows)
 
+for index in selected_rows:
+    input_t = index.reshape(1, 3)
+    predict_value = interp_c.predict_values(input_t)
+    actual_value = selected_results[i]
 
-# 我也没有搞清楚输入输出的含义究竟是什么
-# 但是我查了一下github上面smt的issue
-# 据说input是throttle, altitude, Mach number
-# throttle是油门
-# altitude是海拔
-# Mach Number是马赫（速度单位）
-# outputs是SFC, thrust
-# Specific Fuel Consumption(SFC): 单位油耗比
-# thrust: 推力比
+    relative_acc_SFC[i] = 1-abs(predict_value[0][0] - actual_value[0]) / actual_value[0]
+    relative_acc_thrust[i] = 1-abs(predict_value[0][1] - actual_value[1]) / actual_value[1]
+
+    i = i + 1
+
+print("This is relative acc of SFC\n")
+print(relative_acc_SFC)
+print("This is relative acc of thrust\n")
+print(relative_acc_thrust)
+print("Final acc of SFC")
+print(np.sum(relative_acc_SFC) / 100)
+print("Final acc of thrust")
+print(np.sum(relative_acc_thrust) / 100)

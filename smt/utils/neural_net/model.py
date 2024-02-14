@@ -144,20 +144,20 @@ class Model(object):
         self._parameters = parameters
 
     def train(
-        self,
-        X,
-        Y,
-        J=None,
-        num_iterations=100,
-        mini_batch_size=None,
-        num_epochs=1,
-        alpha=0.01,
-        beta1=0.9,
-        beta2=0.99,
-        lambd=0.0,
-        gamma=0.0,
-        seed=None,
-        silent=False,
+            self,
+            X,
+            Y,
+            J=None,
+            num_iterations=100,
+            mini_batch_size=None,
+            num_epochs=1,
+            alpha=0.01,
+            beta1=0.9,
+            beta2=0.99,
+            lambd=0.0,
+            gamma=0.0,
+            seed=None,
+            silent=False,
     ):
         """
         Train the neural network
@@ -225,7 +225,7 @@ class Model(object):
                 avg_cost = np.mean(optimizer.cost_history).squeeze()
                 self._training_history["epoch_" + str(e)][
                     "batch_" + str(b)
-                ] = optimizer.cost_history
+                    ] = optimizer.cost_history
 
                 if not silent:
                     print(
@@ -324,6 +324,78 @@ class Model(object):
             if is_show_plot:
                 plt.show()
 
+    def plot_training_history_with_compression(self, compressedModel, title="Training History", is_show_plot=True):
+        """
+        Plot the convergence history of the neural network learning algorithm
+        """
+        import matplotlib.pyplot as plt
+
+        if self.training_history:
+            if len(self.training_history.keys()) > 1:
+                x_label = "epoch"
+                y_label = "avg cost"
+                y = []
+                for epoch, batches in self.training_history.items():
+                    avg_costs = []
+                    for batch, values in batches.items():
+                        avg_cost = np.mean(np.array(values))
+                        avg_costs.append(avg_cost)
+                    y.append(np.mean(np.array(avg_costs)))
+                y = np.array(y)
+                x = np.arange(len(y))
+            elif len(self.training_history["epoch_0"]) > 1:
+                x_label = "mini-batch"
+                y_label = "avg cost"
+                y = []
+                for batch, values in self.training_history["epoch_0"].items():
+                    avg_cost = np.mean(np.array(values))
+                    y.append(avg_cost)
+                y = np.array(y)
+                x = np.arange(y.size)
+            else:
+                x_label = "optimizer iteration"
+                y_label = "cost"
+                y = np.array(self.training_history["epoch_0"]["batch_0"])
+                x = np.arange(y.size)
+
+            if len(compressedModel.training_history.keys()) > 1:
+                x_label = "epoch"
+                y_label = "avg cost"
+                y_c = []
+                for epoch, batches in compressedModel.training_history.items():
+                    avg_costs_c = []
+                    for batch, values in batches.items():
+                        avg_cost_c = np.mean(np.array(values))
+                        avg_costs_c.append(avg_cost_c)
+                    y_c.append(np.mean(np.array(avg_costs_c)))
+                y_c = np.array(y_c)
+                x_c = np.arange(len(y_c))
+            elif len(compressedModel.training_history["epoch_0"]) > 1:
+                x_label = "mini-batch"
+                y_label = "avg cost"
+                y_c = []
+                for batch, values in compressedModel.training_history["epoch_0"].items():
+                    avg_cost_c = np.mean(np.array(values))
+                    y_c.append(avg_cost_c)
+                y_c = np.array(y_c)
+                x_c = np.arange(y_c.size)
+            else:
+                x_label = "optimizer iteration"
+                y_label = "cost"
+                y_c = np.array(compressedModel.training_history["epoch_0"]["batch_0"])
+                x_c = np.arange(y_c.size)
+
+            plt.plot(x, y)
+            plt.plot(x_c, y_c)
+            plt.xlabel(x_label)
+            plt.ylabel(y_label)
+            plt.legend(["Surrogate Model", "Compressed Surrogate Model"])
+            plt.title(title)
+
+            if is_show_plot:
+                plt.savefig("/Users/yanliangli/Workspace/smt/smt/examples/figure/gennTrainHistory.jpg")
+                plt.show()
+
     def _load_training_data(self, X, Y, J=None):
         """
         Load and normalize training data
@@ -358,14 +430,14 @@ class Model(object):
         self._n_y = Y.shape[0]
 
     def cost(
-        self,
-        parameters,
-        activations,
-        x,
-        y_true=None,
-        dy_true=None,
-        lambd=0.0,
-        gamma=0.0,
+            self,
+            parameters,
+            activations,
+            x,
+            y_true=None,
+            dy_true=None,
+            lambd=0.0,
+            gamma=0.0,
     ):
         """
         Cost function for training
@@ -386,14 +458,14 @@ class Model(object):
         return cost
 
     def grad(
-        self,
-        parameters,
-        activations,
-        x,
-        y_true=None,
-        dy_true=None,
-        lambd=0.0,
-        gamma=0.0,
+            self,
+            parameters,
+            activations,
+            x,
+            y_true=None,
+            dy_true=None,
+            lambd=0.0,
+            gamma=0.0,
     ):
         """
         Gradient of cost function for training
@@ -528,9 +600,146 @@ class Model(object):
 
         return metrics
 
+    def goodness_of_fit_with_compression(self, compressedModel, X_test, Y_test, J_test=None, response=0, partial=0):
+        import matplotlib.pyplot as plt
+        import matplotlib.gridspec as gridspec
+
+        assert X_test.shape[1] == Y_test.shape[1]
+        assert Y_test.shape[0] == Y_test.shape[0]
+        assert X_test.shape[0] == self.number_of_inputs
+        assert Y_test.shape[0] == self.number_of_outputs
+        if type(J_test) == np.ndarray:
+            assert X_test.shape[1] == J_test.shape[2]
+            assert X_test.shape[0] == J_test.shape[1]
+
+        number_test_examples = Y_test.shape[1]
+
+        Y_pred_test = self.evaluate(X_test)
+        J_pred_test = self.gradient(X_test)
+        Y_pred_test_c = compressedModel.evaluate(X_test)
+        J_pred_test_c = compressedModel.gradient(X_test)
+
+        X_train, Y_train, J_train = self.training_data
+
+        Y_pred_train = self.evaluate(X_train)
+        J_pred_train = self.gradient(X_train)
+        Y_pred_train_c = compressedModel.evaluate(X_train)
+        J_pred_train_c = compressedModel.gradient(X_train)
+
+        if type(J_test) == np.ndarray:
+            test = J_test[response, partial, :].reshape((1, number_test_examples))
+            test_pred = J_pred_test[response, partial, :].reshape(
+                (1, number_test_examples)
+            )
+            test_pred_c = J_pred_test_c[response, partial, :].reshape(
+                (1, number_test_examples)
+            )
+            train = J_train[response, partial, :].reshape(
+                (1, self.number_training_examples)
+            )
+            train_pred = J_pred_train[response, partial, :].reshape(
+                (1, self.number_training_examples)
+            )
+            train_pred_c = J_pred_train_c[response, partial, :].reshape(
+                (1, self.number_training_examples)
+            )
+            title = "Goodness of fit for dY" + str(response) + "/dX" + str(partial)
+        else:
+            test = Y_test[response, :].reshape((1, number_test_examples))
+            test_pred = Y_pred_test[response, :].reshape((1, number_test_examples))
+            test_pred_c = Y_pred_test_c[response, :].reshape((1, number_test_examples))
+            train = Y_train[response, :].reshape((1, self.number_training_examples))
+            train_pred = Y_pred_train[response, :].reshape(
+                (1, self.number_training_examples)
+            )
+            train_pred_c = Y_pred_train_c[response, :].reshape(
+                (1, self.number_training_examples)
+            )
+            title = "Goodness of fit for Y" + str(response)
+
+        metrics = dict()
+        metrics["R_squared"] = np.round(rsquare(test_pred, test), 2).squeeze()
+        metrics["std_error"] = np.round(
+            np.std(test_pred - test).reshape(1, 1), 2
+        ).squeeze()
+        metrics["avg_error"] = np.round(
+            np.mean(test_pred - test).reshape(1, 1), 2
+        ).squeeze()
+
+        metrics_c = dict()
+        metrics_c["R_squared"] = np.round(rsquare(test_pred_c, test), 2).squeeze()
+        metrics_c["std_error"] = np.round(
+            np.std(test_pred_c - test).reshape(1, 1), 2
+        ).squeeze()
+        metrics_c["avg_error"] = np.round(
+            np.mean(test_pred_c - test).reshape(1, 1), 2
+        ).squeeze()
+
+        # Reference line
+        y = np.linspace(
+            min(np.min(test), np.min(train)), max(np.max(test), np.max(train)), 100
+        )
+
+        # Prepare to plot
+        fig = plt.figure(figsize=(12, 12))
+        fig.suptitle(title, fontsize=16)
+        spec = gridspec.GridSpec(ncols=2, nrows=2, wspace=0.25)
+
+        # Plot
+        ax1 = fig.add_subplot(spec[0, 0])
+        ax1.plot(y, y)
+        ax1.scatter(test, test_pred, s=20, c="r")
+        ax1.scatter(train, train_pred, s=100, c="k", marker="+")
+        plt.legend(["perfect", "test", "train"])
+        plt.xlabel("actual")
+        plt.ylabel("predicted")
+        plt.title("Original: RSquare = " + str(metrics["R_squared"]))
+
+        ax2 = fig.add_subplot(spec[0, 1])
+        error = (test_pred - test).T
+        weights = np.ones(error.shape) / test_pred.shape[1]
+        ax2.hist(error, weights=weights, facecolor="g", alpha=0.75)
+        plt.xlabel("Absolute Prediction Error")
+        plt.ylabel("Probability")
+        plt.title(
+            "$\mu$="
+            + str(metrics["avg_error"])
+            + ", $\sigma=$"
+            + str(metrics["std_error"])
+        )
+        plt.grid(True)
+
+        ax3 = fig.add_subplot(spec[1, 0])
+        ax3.plot(y, y)
+        ax3.scatter(test, test_pred, s=20, c="r")
+        ax3.scatter(train, train_pred_c, s=20, c="g", marker="o")
+        plt.legend(["perfect", "test", "Compression_train"])
+        plt.xlabel("actual")
+        plt.ylabel("predicted")
+        plt.title("Compression: RSquare = " + str(metrics_c["R_squared"]))
+
+        ax4 = fig.add_subplot(spec[1, 1])
+        error_c = (test_pred_c - test).T
+        weights_c = np.ones(error_c.shape) / test_pred_c.shape[1]
+        ax4.hist(error_c, weights=weights_c, facecolor="r", alpha=0.75)
+        plt.xlabel("Absolute Prediction Error")
+        plt.ylabel("Probability")
+        plt.title(
+            "$\mu$="
+            + str(metrics_c["avg_error"])
+            + ", $\sigma=$"
+            + str(metrics_c["std_error"])
+        )
+        plt.grid(True)
+
+        plt.savefig("/Users/yanliangli/Workspace/smt/smt/examples/figure/gennGoodness.jpg")
+        plt.show()
+
+        return metrics
+
 
 def run_example(
-    train_csv, test_csv, inputs, outputs, partials=None
+        train_csv, test_csv, inputs, outputs, partials=None
 ):  # pragma: no cover
     """
     Example using 2D Rastrigin function (egg-crate-looking function)

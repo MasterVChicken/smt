@@ -6,6 +6,8 @@ Predicting Airfoil Aerodynamics through data by Raul Carreira Rufato and Prof. J
 
 import numpy as np
 import zfpy
+import os
+
 
 from smt.examples.airfoil_parameters.learning_airfoil_parameters import (
     load_cd_training_data,
@@ -15,7 +17,21 @@ from smt.examples.airfoil_parameters.learning_airfoil_parameters import (
 from sklearn.model_selection import train_test_split
 from smt.surrogate_models.genn import GENN, load_smt_data
 
+def compress_and_calculate_ratio(data):
+    # Compress data
+    compressed_data = zfpy.compress_numpy(data, tolerance=1e-4)
+
+    # Caculate data size before and after compression
+    original_size = data.nbytes
+    compressed_size = len(compressed_data)
+
+    # caculate compression ratio
+    compression_ratio = original_size / compressed_size
+
+    return compression_ratio, original_size, compressed_size
+
 x, y, dy = load_cd_training_data()
+WORKDIR = os.path.dirname(os.path.abspath(__file__))
 
 # splitting the dataset
 x_train, x_test, y_train, y_test, dy_train, dy_test = train_test_split(
@@ -23,6 +39,8 @@ x_train, x_test, y_train, y_test, dy_train, dy_test = train_test_split(
 )
 # building and training the GENN
 genn = GENN(print_global=False)
+# compression
+genn.options["comp"] = True
 # learning rate that controls optimizer step size
 genn.options["alpha"] = 0.001
 # lambd = 0. = no regularization, lambd > 0 = regularization
@@ -41,11 +59,16 @@ genn.options["num_epochs"] = 5
 genn.options["num_iterations"] = 10
 # print output (or not)
 genn.options["is_print"] = False
+
 # convenience function to read in data that is in SMT format
-load_smt_data(genn, x_train, y_train, dy_train)
+# load_smt_data(genn, x_train, y_train, dy_train)
+
+# 将load_data模组改为内置函数
+genn.load_smt_data(x_train, y_train, dy_train)
 
 genn.train()
 
+# 其实没有太大用处，主要是为了展现训练过程中的convergence and accuracy指标
 ## non-API function to plot training history (to check convergence)
 genn.plot_training_history()
 ## non-API function to check accuracy of regression
@@ -76,6 +99,12 @@ input[0, -1] = alpha
 cd_pred = genn.predict_values(input)
 print("Drag coefficient prediction (cd): ", cd_pred[0, 0])
 
-plot_predictions(airfoil_modeshapes, Ma, genn)
+# plot_predictions(airfoil_modeshapes, Ma, genn)
+genn.plot_predictions_with_compression(airfoil_modeshapes, Ma, WORKDIR)
 
-# plot_predictions_with_compression(airfoil_modeshapes, Ma, genn)
+x_comp_ratio, x_size, x_comp_size = compress_and_calculate_ratio(x)
+y_comp_ratio, y_size, y_comp_size = compress_and_calculate_ratio(y)
+dy_comp_ratio, dy_size, dy_comp_size = compress_and_calculate_ratio(dy)
+print(x_comp_ratio, x_size, x_comp_size)
+print(y_comp_ratio, y_size, y_comp_size)
+print(dy_comp_ratio, dy_size, dy_comp_size)

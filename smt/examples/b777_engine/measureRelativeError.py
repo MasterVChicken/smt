@@ -1,7 +1,7 @@
 import numpy as np
 
 from smt.surrogate_models import RMTB
-from smt.examples.b777_engine.b777_engine import get_b777_engine, plot_b777_engine, get_b777_engine_compressed
+from smt.examples.b777_engine.b777_engine import get_b777_engine, plot_b777_engine, get_b777_engine_compressed, plot_b777_engine_with_compression, compress_and_calculate_ratio
 
 xt, yt, dyt_dxt, xlimits = get_b777_engine()
 
@@ -56,8 +56,8 @@ for index in selected_rows:
     predict_value = interp_c.predict_values(input_t)
     actual_value = selected_results[i]
 
-    relative_acc_SFC[i] = 1-abs(predict_value[0][0] - actual_value[0]) / actual_value[0]
-    relative_acc_thrust[i] = 1-abs(predict_value[0][1] - actual_value[1]) / actual_value[1]
+    relative_acc_SFC[i] = 1-abs(predict_value[0][1] - actual_value[1]) / actual_value[1]
+    relative_acc_thrust[i] = 1-abs(predict_value[0][0] - actual_value[0]) / actual_value[0]
 
     i = i + 1
 
@@ -69,3 +69,13 @@ print("Final acc of SFC")
 print(np.sum(relative_acc_SFC) / 100)
 print("Final acc of thrust")
 print(np.sum(relative_acc_thrust) / 100)
+
+plot_b777_engine_with_compression(xt, yt, xlimits, interp, interp_c)
+
+xt_comp_ratio, xt_size, xt_comp_size = compress_and_calculate_ratio(xt)
+yt_comp_ratio, yt_size, yt_comp_size = compress_and_calculate_ratio(yt)
+dyt_dxt_comp_ratio, dyt_dxt_size, dyt_dxt_comp_size = compress_and_calculate_ratio(dyt_dxt)
+
+print(xt_comp_ratio, xt_size, xt_comp_size)
+print(yt_comp_ratio, yt_size, yt_comp_size)
+print(dyt_dxt_comp_ratio, dyt_dxt_size, dyt_dxt_comp_size)

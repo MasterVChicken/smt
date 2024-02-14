@@ -20,32 +20,8 @@ interp.set_training_derivatives(xt, dyt_dxt[:, :, 1], 1)
 interp.set_training_derivatives(xt, dyt_dxt[:, :, 2], 2)
 interp.train()
 
-plot_b777_engine(xt, yt, xlimits, interp)
-
-xt_c, yt_c, dyt_dxt_c, xlimits_c = get_b777_engine_compressed()
-
-interp_c = RMTB(
-    num_ctrl_pts=15,
-    xlimits=xlimits_c,
-    nonlinear_maxiter=20,
-    approx_order=2,
-    energy_weight=0e-14,
-    regularization_weight=0e-18,
-    extrapolate=True,
-)
-interp_c.set_training_values(xt_c, yt_c)
-interp_c.set_training_derivatives(xt_c, dyt_dxt_c[:, :, 0], 0)
-interp_c.set_training_derivatives(xt_c, dyt_dxt_c[:, :, 1], 1)
-interp_c.set_training_derivatives(xt_c, dyt_dxt_c[:, :, 2], 2)
-interp_c.train()
-plot_b777_engine(xt_c, yt_c, xlimits_c, interp_c)
-
-print("Let's compare")
-print(
-    interp.predict_values(numpy.array([[1.000000000000000056e-01,1.523999999999999799e+00,8.000011854064611461e-01]])))
-print(interp_c.predict_values(
-    numpy.array([[1.000000000000000056e-01,1.523999999999999799e+00,8.000011854064611461e-01]])))
-
+# plot_b777_engine(xt, yt, xlimits, interp)
+plot_b777_engine()
 
 # 我也没有搞清楚输入输出的含义究竟是什么
 # 但是我查了一下github上面smt的issue

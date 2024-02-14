@@ -10,6 +10,9 @@ from smt.surrogate_models.surrogate_model import SurrogateModel
 from smt.utils.neural_net.model import Model
 
 import numpy as np
+import os
+import csv
+import zfpy
 
 
 # ------------------------------------ S U P P O R T   F U N C T I O N S -----------------------------------------------
@@ -116,6 +119,7 @@ class GENN(SurrogateModel):
     def _initialize(self):
         """API function: set default values for user options"""
         declare = self.options.declare
+        declare("comp", False, types=bool, desc="compression")
         declare("alpha", 0.5, types=(int, float), desc="optimizer learning rate")
         declare(
             "beta1", 0.9, types=(int, float), desc="Adam optimizer tuning parameter"
@@ -156,6 +160,7 @@ class GENN(SurrogateModel):
         self.supports["training_derivatives"] = True
 
         self.model = Model()
+        self.compressedModel = Model()
 
         self._is_trained = False
 
@@ -170,6 +175,8 @@ class GENN(SurrogateModel):
         if type(J) == np.ndarray and J.size == 0:
             self.options["gamma"] = 0.0
 
+        # Extension for compression
+        compression = self.options["comp"]
         # Get hyperparameters from SMT API
         alpha = self.options["alpha"]
         beta1 = self.options["beta1"]
@@ -206,6 +213,24 @@ class GENN(SurrogateModel):
             silent=not is_print,
         )
 
+        if (compression):
+            self.compressedModel = Model.initialize(n_x, n_y, deep, wide)
+            self.compressedModel.train(
+                X=zfpy.decompress_numpy(zfpy.compress_numpy(X, tolerance=1e-4)),
+                Y=zfpy.decompress_numpy(zfpy.compress_numpy(Y, tolerance=1e-4)),
+                J=zfpy.decompress_numpy(zfpy.compress_numpy(J, tolerance=1e-4)),
+                num_iterations=num_iterations,
+                mini_batch_size=mini_batch_size,
+                num_epochs=num_epochs,
+                alpha=alpha,
+                beta1=beta1,
+                beta2=beta2,
+                lambd=lambd,
+                gamma=gamma,
+                seed=seed,
+                silent=not is_print,
+            )
+
         self._is_trained = True
 
     def _predict_values(self, x):
@@ -216,6 +241,10 @@ class GENN(SurrogateModel):
         :return y: np.ndarray[n, ny] -- Output values at the prediction points
         """
         return self.model.evaluate(x.T).T
+
+    # class function for compressed model predicting
+    def _predict_compressed_values(self, x):
+        return self.compressedModel.evaluate(x.T).T
 
     def _predict_derivatives(self, x, kx):
         """
@@ -229,7 +258,10 @@ class GENN(SurrogateModel):
 
     def plot_training_history(self):
         if self._is_trained:
-            self.model.plot_training_history()
+            if self.options["comp"]:
+                self.model.plot_training_history_with_compression(self.compressedModel)
+            else:
+                self.model.plot_training_history()
 
     def goodness_of_fit(self, xv, yv, dyv_dxv):
         """
@@ -248,11 +280,122 @@ class GENN(SurrogateModel):
         # Convert from SMT format to a more convenient format for GENN
         X, Y, J = smt_to_genn(self.training_points)
 
-        # Generate goodness of fit plots
-        self.model.goodness_of_fit(X, Y)
+        if self.options["comp"]:
+            self.model.goodness_of_fit_with_compression(self.compressedModel, X, Y)
+        else:
+            # Generate goodness of fit plots
+            self.model.goodness_of_fit(X, Y)
 
         # Restore training points
         self.training_points = training_points
+
+    def load_smt_data(self, xt, yt, dyt_dxt=None):
+        """
+            Utility function to load SMT data more easily (Migrated from support function)
+
+            :param model: SurrogateModel object for which to load training data
+            :param xt: smt data points at which response is evaluated
+            :param yt: response at xt
+            :param dyt_dxt: gradient at xt
+            """
+        # Dimensionality
+        if len(xt.shape) == 1:
+            n_x = 1  # number of variables, x
+            m = xt.size
+        else:
+            m, n_x = xt.shape
+
+        if len(yt.shape) == 1:
+            n_y = 1  # number of responses, y
+        else:
+            n_y = yt.shape[1]
+
+        # Reshape arrays
+        xt = xt.reshape((m, n_x))
+        yt = yt.reshape((m, n_y))
+
+        # Load values
+        self.set_training_values(xt, yt)
+        # .set_training_values(xt, yt)
+
+        # Load partials
+        if dyt_dxt is not None:
+            dyt_dxt = dyt_dxt.reshape((m, n_x))
+            for i in range(n_x):
+                self.set_training_derivatives(xt, dyt_dxt[:, i].reshape((m, 1)), i)
+
+    def plot_predictions(self, airfoil_modeshapes, Ma, WORKDIR):
+        import matplotlib
+
+        # matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        # alpha is linearily distributed over the range of -1 to 7 degrees
+        # while Ma is kept constant
+        inputs = np.zeros(shape=(1, 15))
+        inputs[0, :14] = airfoil_modeshapes
+        inputs[0, -1] = Ma
+        inputs = np.tile(inputs, (50, 1))
+
+        alpha = np.atleast_2d([-1 + 0.16 * i for i in range(50)]).T
+
+        inputs = np.concatenate((inputs, alpha), axis=1)
+
+        # Predict Cd
+        cd_pred = self.predict_values(inputs)
+
+        # Load ADflow Cd reference
+        with open(os.path.join(WORKDIR, "NACA4412-ADflow-alpha-cd.csv")) as file:
+            reader = csv.reader(file, delimiter=" ")
+            cd_adflow = np.array(list(reader)[1:], dtype=np.float32)
+
+        plt.plot(alpha, cd_pred)
+        plt.plot(cd_adflow[:, 0], cd_adflow[:, 1])
+        plt.grid(True)
+        plt.legend(["Surrogate", "ADflow"])
+        plt.title("Drag coefficient")
+        plt.xlabel("Alpha")
+        plt.ylabel("Cd")
+        plt.show()
+
+    def plot_predictions_with_compression(self, airfoil_modeshapes, Ma, WORKDIR):
+        import matplotlib
+
+        # matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        # alpha is linearily distributed over the range of -1 to 7 degrees
+        # while Ma is kept constant
+        inputs = np.zeros(shape=(1, 15))
+        inputs[0, :14] = airfoil_modeshapes
+        inputs[0, -1] = Ma
+        inputs = np.tile(inputs, (50, 1))
+
+        alpha = np.atleast_2d([-1 + 0.16 * i for i in range(50)]).T
+
+        inputs = np.concatenate((inputs, alpha), axis=1)
+
+        # 但是讲真我不知道这俩预测的function有啥区别
+        # Predict Cd
+        # cd_pred = self.predict_values(inputs)
+        cd_pred = self._predict_values(inputs)
+        compressed_cd_pred = self._predict_compressed_values(inputs)
+
+        # Load ADflow Cd reference
+        with open(os.path.join(WORKDIR, "NACA4412-ADflow-alpha-cd.csv")) as file:
+            reader = csv.reader(file, delimiter=" ")
+            cd_adflow = np.array(list(reader)[1:], dtype=np.float32)
+
+        plt.plot(alpha, cd_pred)
+        plt.plot(alpha, compressed_cd_pred)
+        plt.plot(cd_adflow[:, 0], cd_adflow[:, 1])
+        plt.grid(True)
+        plt.legend(["Surrogate", "Compressed Surrogate", "ADflow"])
+        plt.title("Drag coefficient")
+        plt.xlabel("Alpha")
+        plt.ylabel("Cd")
+        plt.savefig("/Users/yanliangli/Workspace/smt/smt/examples/figure/gennOutcome.jpg")
+        plt.show()
 
 
 def run_example(is_gradient_enhancement=True):  # pragma: no cover
